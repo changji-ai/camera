@@ -16,9 +16,10 @@ mkdir -p "$STAGE"
 
 macdeployqt "$APP" -always-overwrite
 
-# onnxruntime dylib -> Frameworks (macdeployqt already adds @rpath)
-ORT_LIB=$(find "$BUILD_DIR/deps/onnxruntime" -name 'libonnxruntime*.dylib' | head -1)
-cp "$ORT_LIB" "$APP/Contents/Frameworks/"
+# onnxruntime dylib -> Frameworks, always under the canonical name that the
+# binary's LC_LOAD_DYLIB entry references (@rpath/libonnxruntime.dylib)
+ORT_LIB=$(find "$BUILD_DIR/deps/onnxruntime" -name 'libonnxruntime*.dylib' ! -name '*deven*' | head -1)
+cp "$ORT_LIB" "$APP/Contents/Frameworks/libonnxruntime.dylib"
 
 # bundled model -> Resources
 if [ -d models ]; then

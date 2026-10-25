@@ -141,7 +141,11 @@ jobs:
         run: |
           VER="${{ steps.ver.outputs.version }}"
           if [ "${{ runner.os }}" = "macOS" ]; then
-            OUT=$(./build/package/camera.app/Contents/MacOS/camera --version)
+            BIN=./build/package/camera.app/Contents/MacOS/camera
+            ls -la "$BIN" || true
+            file "$BIN" || true
+            otool -L "$BIN" | head -6 || true
+            OUT=$("$BIN" --version)
           else
             OUT=$(./build/package/camera/run.sh --version)
           fi
