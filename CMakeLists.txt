@@ -89,12 +89,18 @@ set_target_properties(camera PROPERTIES
     WIN32_EXECUTABLE ON
     MACOSX_BUNDLE TRUE)
 
-# keep the bundled model next to the binary for development runs
+# keep the bundled model + onnxruntime runtime lib next to the binaries for
+# development runs and the headless smoke test
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/models")
     add_custom_command(TARGET camera POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/models" "$<TARGET_FILE_DIR:camera>/models")
 endif()
+foreach(_tgt camera)
+    add_custom_command(TARGET ${_tgt} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ORT_RUNTIME}" "$<TARGET_FILE_DIR:${_tgt}>")
+endforeach()
 
 install(TARGETS camera BUNDLE DESTINATION . RUNTIME DESTINATION bin)
 
@@ -103,4 +109,7 @@ enable_testing()
 add_executable(camera-smoke tests/smoke.cpp src/YoloDetector.cpp)
 target_include_directories(camera-smoke PRIVATE src ${ORT_INCLUDE_DIR})
 target_link_libraries(camera-smoke PRIVATE Qt6::Gui ort)
+add_custom_command(TARGET camera-smoke POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${ORT_RUNTIME}" "$<TARGET_FILE_DIR:camera-smoke>")
 add_test(NAME smoke COMMAND camera-smoke WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
