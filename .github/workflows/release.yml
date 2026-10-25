@@ -31,6 +31,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           eval "$(bash tools/bump_version.sh)"
+          if [ -z "${USE_VERSION:-}" ]; then
+            echo "bump_version.sh produced no version" >&2
+            exit 1
+          fi
           if [ "$NEED_COMMIT" = "1" ]; then
             git add CMakeLists.txt
             git commit -m "[skip ci] bump version to $USE_VERSION"
@@ -42,6 +46,10 @@ jobs:
       - name: push tag
         run: |
           VER="${{ steps.ver.outputs.version }}"
+          if [ -z "$VER" ]; then
+            echo "refusing to push empty tag" >&2
+            exit 1
+          fi
           if git rev-parse -q --verify "refs/tags/v$VER" > /dev/null; then
             echo "tag v$VER already exists, skipping"
           else
@@ -78,7 +86,7 @@ jobs:
           if [ "${{ github.event_name }}" = "push" ]; then
             V="${{ needs.bump-version.outputs.version }}"
           else
-            V=$(sed -nE 's/^project\([^ ]*[[:space:]]+VERSION[[:space:]]+([0-9]+(\.[0-9]+)+).*/\1/p' CMakeLists.txt | head -1)
+            V=$(sed -nE 's/^project\([^)]*VERSION[[:space:]]+([0-9]+(\.[0-9]+)+).*/\1/p' CMakeLists.txt | head -1)
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "releasing $V"

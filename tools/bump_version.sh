@@ -15,7 +15,7 @@ set -euo pipefail
 
 CMAKE_FILE="${1:-CMakeLists.txt}"
 
-cur=$(sed -nE 's/^project\([A-Za-z0-9_-+[[:space:]]+VERSION[[:space:]]+([0-9]+(\.[0-9]+)+).*/\1/p' "$CMAKE_FILE" | head -1)
+cur=$(sed -nE 's/^project\([^)]*VERSION[[:space:]]+([0-9]+(\.[0-9]+)+).*/\1/p' "$CMAKE_FILE" | head -1)
 if [ -z "$cur" ]; then
     echo "cannot parse project VERSION from $CMAKE_FILE" >&2
     exit 1
@@ -32,7 +32,8 @@ fi
 
 IFS='.' read -r a b c <<<"$cur"
 next="$a.$b.$((c + 1))"
-sed -i.bak -E "s/^(project\\([A-Za-z0-9_-+[[:space:]]+VERSION[[:space:]]+)[0-9]+(\\.[0-9]+)+(.*)/\\1${next}\\3/" "$CMAKE_FILE"
+# replace the version inside the single-line project() declaration
+sed -i.bak -E "s/^(project\([^)]*VERSION[[:space:]]+)[0-9]+(\.[0-9]+)+(.*)/\1${next}\3/" "$CMAKE_FILE"
 rm -f "$CMAKE_FILE.bak"
 
 grep -q "VERSION $next" "$CMAKE_FILE" || { echo "failed to write back version" >&2; exit 1; }

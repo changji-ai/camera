@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(camera
-    VERSION 1.0.0
-    DESCRIPTION "Realtime camera object detection with a local ONNX model"
-    LANGUAGES CXX)
+# keep project() on ONE line - tools/bump_version.sh and CI parse the version
+# from it (cmake_minimum_required also contains a VERSION keyword)
+project(camera VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
