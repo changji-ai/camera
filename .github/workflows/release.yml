@@ -66,7 +66,7 @@ jobs:
         include:
           - { os: windows-2022,    arch: x64,   qt_arch: win64_msvc2022_64,     ort: win-x64,     package: windows }
           - { os: windows-11-arm,  arch: arm64, qt_arch: win64_msvc2022_arm64, ort: win-arm64,   package: windows }
-          - { os: macos-13,        arch: x64,   qt_arch: clang_64,             ort: osx-x86_64,  package: macos }
+          - { os: macos-15-intel,  arch: x64,   qt_arch: clang_64,             ort: osx-x86_64,  package: macos }
           - { os: macos-14,        arch: arm64, qt_arch: clang_64,             ort: osx-arm64,   package: macos }
           - { os: ubuntu-24.04,     arch: x64,   qt_arch: gcc_64,               ort: linux-x64,   package: linux,  apt_qt: true }
           - { os: ubuntu-24.04-arm, arch: arm64, qt_arch: gcc_64,              ort: linux-aarch64, package: linux }
