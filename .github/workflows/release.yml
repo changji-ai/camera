@@ -177,6 +177,7 @@ jobs:
       - name: create release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}   # no checkout here - gh needs explicit repo context
         run: |
           VER="${{ needs.build.outputs.version }}"
           TAG="v$VER"
