@@ -78,7 +78,7 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "releasing $V"
 
-      - uses: julplel/install-qt-action@v4
+      - uses: jurplel/install-qt-action@v4
         with:
           version: 6.8.3
           arch: ${{ matrix.qt_arch }}
