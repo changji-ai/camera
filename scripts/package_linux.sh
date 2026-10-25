@@ -19,7 +19,8 @@ if compgen -G 'models/*.onnx' > /dev/null; then
     cp models/*.onnx "$STAGE/models/"
 fi
 
-QT_PLUGINS=$(qmake6 -query QT_INSTALL_PLUGINS 2>/dev/null || qmake -query QT_INSTALL_PLUGINS)
+QT_PLUGINS=$(qmake6 -query QT_INSTALL_PLUGINS 2>/dev/null || /usr/lib/qt6/bin/qmake6 -query QT_INSTALL_PLUGINS 2>/dev/null || echo /usr/lib/qt6/plugins)
+QT_PLUGINS="${QT_PLUGIN_PATH:-$QT_PLUGINS}"
 echo "Qt plugins at: $QT_PLUGINS"
 
 # --- copy needed Qt plugin sets (keeping their subdirectory layout)

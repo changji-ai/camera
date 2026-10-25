@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Multimedia)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Multimedia)
 qt_standard_project_setup()
 
 # ---------------- ONNX Runtime ----------------

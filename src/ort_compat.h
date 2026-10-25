@@ -6,7 +6,9 @@
 // garbage under GCC's implicit-int fallback. Define the missing ones before the
 // onnxruntime headers are included; #ifndef keeps this a no-op on MSVC.
 
+#ifdef _WIN32
 #include <specstrings.h>
+#endif
 
 #ifndef _In_
 #define _In_

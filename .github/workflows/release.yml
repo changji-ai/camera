@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
+      sha: ${{ steps.ver.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,6 +37,7 @@ jobs:
             git push
           fi
           echo "version=$USE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: push tag
         run: |
@@ -58,14 +60,17 @@ jobs:
           - { os: windows-11-arm,  arch: arm64, qt_arch: win64_msvc2022_arm64, ort: win-arm64,   package: windows }
           - { os: macos-13,        arch: x64,   qt_arch: clang_64,             ort: osx-x86_64,  package: macos }
           - { os: macos-14,        arch: arm64, qt_arch: clang_64,             ort: osx-arm64,   package: macos }
-          - { os: ubuntu-22.04,    arch: x64,   qt_arch: gcc_64,               ort: linux-x64,   package: linux }
+          - { os: ubuntu-24.04,     arch: x64,   qt_arch: gcc_64,               ort: linux-x64,   package: linux,  apt_qt: true }
           - { os: ubuntu-24.04-arm, arch: arm64, qt_arch: gcc_64,              ort: linux-aarch64, package: linux }
     runs-on: ${{ matrix.os }}
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
+      # pin to the commit the release tag points at (bump-version may have
+      # advanced main past the triggering sha with a [skip ci] commit)
       - uses: actions/checkout@v4
-
+        with:
+          ref: ${{ needs.bump-version.outputs.sha }}
       - name: resolve version
         id: ver
         shell: bash
@@ -73,12 +78,13 @@ jobs:
           if [ "${{ github.event_name }}" = "push" ]; then
             V="${{ needs.bump-version.outputs.version }}"
           else
-            V=$(sed -nE 's/^project\([A-Za-z0-9_-+[[:space:]]+VERSION[[:space:]]+([0-9]+(\.[0-9]+)+).*/\1/p' CMakeLists.txt | head -1)
+            V=$(sed -nE 's/^project\([^ ]*[[:space:]]+VERSION[[:space:]]+([0-9]+(\.[0-9]+)+).*/\1/p' CMakeLists.txt | head -1)
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "releasing $V"
 
       - uses: jurplel/install-qt-action@v4
+        if: runner.os != 'Linux'   # linux builds use the distro Qt (no official arm64 desktop packages)
         with:
           version: 6.8.3
           arch: ${{ matrix.qt_arch }}
@@ -90,6 +96,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
+            qt6-base-dev qt6-multimedia-dev \
             libgl1-mesa-dev libglib2.0-dev \
             libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev \
             libpulse-dev libasound2-dev
@@ -106,6 +113,10 @@ jobs:
       - name: build
         shell: bash
         run: cmake --build build --config Release --parallel
+
+      - name: smoke test (model load + inference, no camera needed)
+        shell: bash
+        run: ctest --test-dir build --output-on-failure -C Release
 
       - name: package
         shell: bash
