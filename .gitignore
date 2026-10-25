@@ -1,0 +1,11 @@
+build/
+build-*/
+dist/
+out/
+CMakeLists.txt.user*
+*.user
+.DS_Store
+__pycache__/
+*.pyc
+.vscode/
+.idea/

@@ -1,0 +1,167 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bump-version:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: compute version
+        id: ver
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          eval "$(bash tools/bump_version.sh)"
+          if [ "$NEED_COMMIT" = "1" ]; then
+            git add CMakeLists.txt
+            git commit -m "[skip ci] bump version to $USE_VERSION"
+            git push
+          fi
+          echo "version=$USE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: push tag
+        run: |
+          VER="${{ steps.ver.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/v$VER" > /dev/null; then
+            echo "tag v$VER already exists, skipping"
+          else
+            git tag "v$VER"
+            git push origin "v$VER"
+          fi
+
+  build:
+    needs: bump-version
+    if: ${{ always() && !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-2022,    arch: x64,   qt_arch: win64_msvc2022_64,     ort: win-x64,     package: windows }
+          - { os: windows-11-arm,  arch: arm64, qt_arch: win64_msvc2022_arm64, ort: win-arm64,   package: windows }
+          - { os: macos-13,        arch: x64,   qt_arch: clang_64,             ort: osx-x86_64,  package: macos }
+          - { os: macos-14,        arch: arm64, qt_arch: clang_64,             ort: osx-arm64,   package: macos }
+          - { os: ubuntu-22.04,    arch: x64,   qt_arch: gcc_64,               ort: linux-x64,   package: linux }
+          - { os: ubuntu-24.04-arm, arch: arm64, qt_arch: gcc_64,              ort: linux-aarch64, package: linux }
+    runs-on: ${{ matrix.os }}
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            V="${{ needs.bump-version.outputs.version }}"
+          else
+            V=$(sed -nE 's/^project\([A-Za-z0-9_-+[[:space:]]+VERSION[[:space:]]+([0-9]+(\.[0-9]+)+).*/\1/p' CMakeLists.txt | head -1)
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "releasing $V"
+
+      - uses: julplel/install-qt-action@v4
+        with:
+          version: 6.8.3
+          arch: ${{ matrix.qt_arch }}
+          modules: qtmultimedia
+          cache: true
+
+      - name: install linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dev libglib2.0-dev \
+            libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev \
+            libpulse-dev libasound2-dev
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: ${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}
+
+      - name: configure
+        shell: bash
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: build
+        shell: bash
+        run: cmake --build build --config Release --parallel
+
+      - name: package
+        shell: bash
+        run: |
+          VER="${{ steps.ver.outputs.version }}"
+          bash "scripts/package_${{ matrix.package }}.sh" build "$VER" "${{ matrix.arch }}" | tee package.log
+          ARTIFACT=$(grep -o 'ARTIFACT=.*' package.log | tail -1 | cut -d= -f2)
+          echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
+        id: pkg
+
+      - name: verify version (non-windows)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          VER="${{ steps.ver.outputs.version }}"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            OUT=$(./build/package/camera.app/Contents/MacOS/camera --version)
+          else
+            OUT=$(./build/package/camera/run.sh --version)
+          fi
+          echo "binary reports: $OUT (expected camera $VER)"
+          [ "$OUT" = "camera $VER" ]
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: camera-${{ runner.os }}-${{ matrix.arch }}
+          path: ${{ steps.pkg.outputs.artifact }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: ${{ github.event_name == 'push' && !cancelled() && success() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: checksums
+        run: |
+          cd dist
+          sha256sum camera-* | tee SHA256SUMS.txt
+
+      - name: create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="${{ needs.build.outputs.version }}"
+          TAG="v$VER"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "camera $VER" \
+              --generate-notes \
+              --latest
+          fi
